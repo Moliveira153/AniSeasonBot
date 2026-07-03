@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -70,7 +69,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.bot = bot
     app.state.dp = dp
     app.state.settings = settings
-    app.state.background_tasks: set[asyncio.Task[None]] = set()
 
     embedded: EmbeddedWorker | None = None
     if settings.embedded_worker:
@@ -156,9 +154,6 @@ async def telegram_webhook(secret: str, request: Request) -> Response:
 
     bot: Bot = request.app.state.bot
     dp: Dispatcher = request.app.state.dp
-    tasks: set[asyncio.Task[None]] = request.app.state.background_tasks
-    task = asyncio.create_task(_process_update(bot, dp, update))
-    tasks.add(task)
-    task.add_done_callback(tasks.discard)
+    await _process_update(bot, dp, update)
 
     return Response(status_code=200)

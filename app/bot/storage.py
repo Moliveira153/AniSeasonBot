@@ -14,8 +14,14 @@ logger = get_logger(__name__)
 
 
 async def create_storage(settings: Settings | None = None) -> BaseStorage:
-    """Try Redis FSM storage; fall back to memory if Redis is unreachable."""
+    """Create FSM storage. On Render uses memory (single instance, more reliable)."""
     settings = settings or get_settings()
+
+    # Render free = 1 instância; memória evita travamentos do Redis FSM
+    if settings.is_render:
+        logger.info("fsm_storage_memory_render")
+        return MemoryStorage()
+
     redis = create_fsm_redis(settings)
     try:
         await redis.ping()

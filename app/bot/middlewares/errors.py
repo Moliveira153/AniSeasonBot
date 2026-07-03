@@ -50,12 +50,15 @@ async def on_dispatcher_error(event: ErrorEvent) -> bool:
         error=str(event.exception),
         update=event.update.model_dump(exclude_none=True) if event.update else None,
     )
-    if event.update and event.update.callback_query:
+    msg = "❌ Erro interno. Tente novamente."
+    if event.update and event.update.message:
         try:
-            await event.update.callback_query.answer(
-                "❌ Erro interno. Tente novamente.",
-                show_alert=True,
-            )
+            await event.update.message.answer(msg)
+        except Exception:
+            pass
+    elif event.update and event.update.callback_query:
+        try:
+            await event.update.callback_query.answer(msg, show_alert=True)
         except Exception:
             pass
     return True

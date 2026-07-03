@@ -11,7 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot.keyboards.inline import language_keyboard, timezone_keyboard, yes_no_keyboard
 from app.bot.states.onboarding import OnboardingStates
 from app.bot.texts.i18n import I18n
-from app.bot.utils.messages import answer_callback, edit_or_send
+from app.bot.utils.messages import (
+    answer_callback,
+    edit_or_send,
+    safe_fsm_clear,
+    safe_fsm_set_state,
+    safe_reply,
+)
 from app.services.user_service import UserService
 from app.utils.logging import get_logger
 
@@ -29,14 +35,15 @@ async def cmd_start(message: Message, state: FSMContext, session: AsyncSession) 
         username=message.from_user.username,  # type: ignore[union-attr]
     )
     i18n = I18n(user.language)
-    await state.clear()
-    await message.answer(i18n.t("welcome"), parse_mode="Markdown")
-    await message.answer(
+    await safe_fsm_clear(state)
+    await safe_reply(message, i18n.t("welcome"), parse_mode=None)
+    await safe_reply(
+        message,
         i18n.t("choose_language"),
         reply_markup=language_keyboard(),
         parse_mode=None,
     )
-    await state.set_state(OnboardingStates.language)
+    await safe_fsm_set_state(state, OnboardingStates.language)
     logger.info("onboarding_started", user_id=message.from_user.id)  # type: ignore[union-attr]
 
 

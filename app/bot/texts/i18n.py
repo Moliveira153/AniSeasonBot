@@ -7,7 +7,7 @@ from typing import Any
 MESSAGES: dict[str, dict[str, str]] = {
     "pt-BR": {
         "welcome": (
-            "👋 *Bem-vindo ao Anime Season Tracker!*\n\n"
+            "👋 Bem-vindo ao Anime Season Tracker!\n\n"
             "Acompanhe animes da temporada atual e receba notificações sobre "
             "novos episódios, mudanças de horário, hiatos e muito mais.\n\n"
             "Use os botões abaixo ou os comandos do menu para navegar."
@@ -72,7 +72,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "en": {
         "welcome": (
-            "👋 *Welcome to Anime Season Tracker!*\n\n"
+            "👋 Welcome to Anime Season Tracker!\n\n"
             "Track current season anime and get notifications about "
             "new episodes, schedule changes, hiatus, and more.\n\n"
             "Use the buttons below or menu commands to navigate."
