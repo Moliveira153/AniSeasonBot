@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 
 from app.config import get_settings
 
@@ -23,8 +23,15 @@ class MaintenanceMiddleware(BaseMiddleware):
 
         admin_ids = set(settings.admin_telegram_ids)
         user_id = None
-        if isinstance(event, (Message, CallbackQuery)) and event.from_user:
+        if isinstance(event, Message) and event.from_user:
             user_id = event.from_user.id
+        elif isinstance(event, CallbackQuery) and event.from_user:
+            user_id = event.from_user.id
+        elif isinstance(event, Update):
+            if event.callback_query and event.callback_query.from_user:
+                user_id = event.callback_query.from_user.id
+            elif event.message and event.message.from_user:
+                user_id = event.message.from_user.id
 
         if user_id in admin_ids:
             return await handler(event, data)

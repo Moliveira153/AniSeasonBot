@@ -15,7 +15,7 @@ from app.bot.middlewares.errors import ErrorHandlerMiddleware
 from app.bot.middlewares.maintenance import MaintenanceMiddleware
 from app.bot.middlewares.throttle import ThrottleMiddleware
 from app.config import Settings, get_settings
-from app.utils.redis_client import create_redis
+from app.utils.redis_client import create_fsm_redis
 
 
 async def set_bot_commands(bot: Bot) -> None:
@@ -49,9 +49,12 @@ def create_bot(settings: Settings | None = None) -> Bot:
     )
 
 
-def create_dispatcher(redis: Redis) -> Dispatcher:
+def create_dispatcher(redis: Redis | None = None, settings: Settings | None = None) -> Dispatcher:
+    settings = settings or get_settings()
+    redis = redis or create_fsm_redis(settings)
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
+
     dp.update.middleware(ErrorHandlerMiddleware())
     dp.update.middleware(MaintenanceMiddleware())
     dp.update.middleware(ThrottleMiddleware())
@@ -60,5 +63,5 @@ def create_dispatcher(redis: Redis) -> Dispatcher:
     return dp
 
 
-def create_redis_client(settings: Settings | None = None) -> Redis:
-    return create_redis(settings)
+def create_fsm_storage_redis(settings: Settings | None = None) -> Redis:
+    return create_fsm_redis(settings)

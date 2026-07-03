@@ -12,9 +12,10 @@ from fastapi.responses import JSONResponse
 from app.bot.factory import (
     create_bot,
     create_dispatcher,
-    create_redis_client,
+    create_fsm_storage_redis,
     set_bot_commands,
 )
+from app.utils.redis_client import create_redis
 from app.bot.middlewares.errors import on_dispatcher_error
 from app.config import get_settings
 from app.database.session import dispose_engine
@@ -38,9 +39,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.error("migration_failed", error=str(exc))
             raise
 
-    redis = create_redis_client(settings)
+    fsm_redis = create_fsm_storage_redis(settings)
+    cache_redis = create_redis(settings)
     bot = create_bot(settings)
-    dp = create_dispatcher(redis)
+    dp = create_dispatcher(fsm_redis, settings)
     dp.errors.register(on_dispatcher_error)
 
     await set_bot_commands(bot)
@@ -60,7 +62,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.bot = bot
     app.state.dp = dp
-    app.state.redis = redis
+    app.state.redis = cache_redis
+    app.state.fsm_redis = fsm_redis
     app.state.settings = settings
 
     embedded: EmbeddedWorker | None = None
@@ -82,7 +85,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.bot_mode == "webhook":
         await bot.delete_webhook(drop_pending_updates=False)
     await bot.session.close()
-    await redis.aclose()
+    await fsm_redis.aclose()
+    await cache_redis.aclose()
     await dispose_engine()
     logger.info("app_stopped")
 
@@ -123,12 +127,26 @@ async def telegram_webhook(secret: str, request: Request) -> Response:
     try:
         payload = await request.json()
         update = Update.model_validate(payload)
+        update_kind = "message" if update.message else "callback" if update.callback_query else "other"
+        logger.info(
+            "webhook_received",
+            update_id=update.update_id,
+            kind=update_kind,
+            user_id=(
+                update.callback_query.from_user.id
+                if update.callback_query and update.callback_query.from_user
+                else update.message.from_user.id
+                if update.message and update.message.from_user
+                else None
+            ),
+            data=update.callback_query.data if update.callback_query else None,
+        )
         bot = request.app.state.bot
         dp = request.app.state.dp
         await dp.feed_update(bot, update)
+        logger.info("webhook_processed", update_id=update.update_id)
     except Exception as exc:
-        logger.error("webhook_processing_error", error=str(exc))
-        # Return 200 so Telegram does not retry indefinitely on bad payloads
+        logger.exception("webhook_processing_error", error=str(exc))
         return Response(status_code=200)
 
     return Response(status_code=200)

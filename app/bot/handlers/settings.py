@@ -86,14 +86,18 @@ async def toggle_notifications(callback: CallbackQuery, session: AsyncSession) -
 
 @router.callback_query(F.data == "set:language")
 async def set_language(callback: CallbackQuery, session: AsyncSession) -> None:
-    await callback.message.edit_text("🌐", reply_markup=language_keyboard())  # type: ignore[union-attr]
-    await callback.answer()
+    from app.bot.utils.messages import answer_callback, edit_or_send
+
+    await answer_callback(callback)
+    await edit_or_send(callback, "🌐 Escolha seu idioma:", reply_markup=language_keyboard())
 
 
 @router.callback_query(F.data == "set:timezone")
 async def set_timezone(callback: CallbackQuery, session: AsyncSession) -> None:
-    await callback.message.edit_text("🕐", reply_markup=timezone_keyboard())  # type: ignore[union-attr]
-    await callback.answer()
+    from app.bot.utils.messages import answer_callback, edit_or_send
+
+    await answer_callback(callback)
+    await edit_or_send(callback, "🕐 Escolha seu fuso horário:", reply_markup=timezone_keyboard())
 
 
 @router.callback_query(F.data == "set:images")

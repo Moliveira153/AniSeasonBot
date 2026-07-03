@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.bot.factory import create_bot, create_dispatcher, create_redis_client, set_bot_commands
+from app.bot.factory import create_bot, create_dispatcher, create_fsm_storage_redis, set_bot_commands
 from app.bot.middlewares.errors import on_dispatcher_error
 from app.config import get_settings
 from app.database.session import dispose_engine
@@ -20,9 +20,9 @@ async def main() -> None:
         print("BOT_MODE=webhook: use 'uvicorn app.web:app --host 0.0.0.0 --port $PORT'")
         sys.exit(1)
 
-    redis = create_redis_client(settings)
+    fsm_redis = create_fsm_storage_redis(settings)
     bot = create_bot(settings)
-    dp = create_dispatcher(redis)
+    dp = create_dispatcher(fsm_redis, settings)
     dp.errors.register(on_dispatcher_error)
 
     await set_bot_commands(bot)
@@ -31,7 +31,7 @@ async def main() -> None:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         await bot.session.close()
-        await redis.aclose()
+        await fsm_redis.aclose()
         await dispose_engine()
 
 

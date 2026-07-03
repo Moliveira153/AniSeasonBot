@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot.keyboards.inline import language_keyboard, timezone_keyboard, yes_no_keyboard
 from app.bot.states.onboarding import OnboardingStates
 from app.bot.texts.i18n import I18n
+from app.bot.utils.messages import answer_callback, edit_or_send
 from app.services.user_service import UserService
+from app.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = Router(name="start")
 
@@ -27,70 +31,90 @@ async def cmd_start(message: Message, state: FSMContext, session: AsyncSession) 
     i18n = I18n(user.language)
     await state.clear()
     await message.answer(i18n.t("welcome"), parse_mode="Markdown")
-    await message.answer(i18n.t("choose_language"), reply_markup=language_keyboard())
+    await message.answer(
+        i18n.t("choose_language"),
+        reply_markup=language_keyboard(),
+        parse_mode=None,
+    )
     await state.set_state(OnboardingStates.language)
+    logger.info("onboarding_started", user_id=message.from_user.id)  # type: ignore[union-attr]
 
 
 @router.callback_query(F.data.startswith("lang:"))
 async def on_language(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    await answer_callback(callback)
     lang = callback.data.split(":")[1]  # type: ignore[union-attr]
+    logger.info("language_selected", user_id=callback.from_user.id, lang=lang)
+
     user_service = UserService(session)
     user = await user_service.get_or_create_from_telegram(callback.from_user.id)
     await user_service.update_language(user, lang)
     i18n = I18n(lang)
-    await callback.message.edit_text(i18n.t("choose_timezone"), reply_markup=timezone_keyboard())  # type: ignore[union-attr]
+
+    await edit_or_send(
+        callback,
+        i18n.t("choose_timezone"),
+        reply_markup=timezone_keyboard(),
+        parse_mode=None,
+    )
     await state.set_state(OnboardingStates.timezone)
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("tz:"))
 async def on_timezone(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    await answer_callback(callback)
     tz = callback.data.split(":")[1]  # type: ignore[union-attr]
+    logger.info("timezone_selected", user_id=callback.from_user.id, tz=tz)
+
     user_service = UserService(session)
     user = await user_service.get_or_create_from_telegram(callback.from_user.id)
     await user_service.update_timezone(user, tz)
     i18n = I18n(user.language)
-    await callback.message.edit_text(  # type: ignore[union-attr]
+
+    await edit_or_send(
+        callback,
         i18n.t("onboarding_season"),
         reply_markup=yes_no_keyboard("onboard:season_yes", "onboard:season_no"),
+        parse_mode=None,
     )
     await state.set_state(OnboardingStates.season_choice)
-    await callback.answer()
 
 
 @router.callback_query(F.data == "onboard:season_yes")
 async def onboard_season_yes(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    await answer_callback(callback)
     from app.bot.handlers.season import show_season_page
 
     await state.set_state(OnboardingStates.season_browse)
     await show_season_page(callback, session, page=1, onboarding=True)
-    await callback.answer()
 
 
 @router.callback_query(F.data == "onboard:season_no")
 async def onboard_season_no(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    await answer_callback(callback)
     user_service = UserService(session)
     user = await user_service.get_or_create_from_telegram(callback.from_user.id)
     i18n = I18n(user.language)
     await state.clear()
-    await callback.message.edit_text(  # type: ignore[union-attr]
+    await edit_or_send(
+        callback,
         f"{i18n.t('welcome')}\n\nUse /ajuda para ver os comandos.",
-        parse_mode="Markdown",
+        parse_mode=None,
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == "onboard:finish")
 async def onboard_finish(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    await answer_callback(callback)
     user_service = UserService(session)
     user = await user_service.get_or_create_from_telegram(callback.from_user.id)
     i18n = I18n(user.language)
     await state.clear()
-    await callback.message.edit_text(  # type: ignore[union-attr]
+    await edit_or_send(
+        callback,
         f"✅ {i18n.t('finish_selection')}\n\nUse /minhalista para ver seus animes.",
-        parse_mode="Markdown",
+        parse_mode=None,
     )
-    await callback.answer()
 
 
 @router.message(Command("ajuda", "help"))
