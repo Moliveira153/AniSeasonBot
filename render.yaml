@@ -1,13 +1,9 @@
-# Render Blueprint — deploy em https://dashboard.render.com
+# Render Blueprint — https://dashboard.render.com/docs/blueprint-spec
 #
-# Plano FREE: usa 1 Web Service + Postgres + Key Value (Redis)
-# O worker roda embutido no web (EMBEDDED_WORKER=true) porque
-# Background Workers exigem plano pago no Render.
+# NOTA: dockerTarget NÃO existe no schema do Render.
+# Usamos runtime Python nativo (recomendado) ou Dockerfile.render (estágio único).
 #
-# Após o deploy:
-# 1. Defina TELEGRAM_BOT_TOKEN no painel
-# 2. Defina KEEPALIVE_URL no cron (ex: https://anime-season-bot.onrender.com)
-# 3. O Render define RENDER_EXTERNAL_URL automaticamente no web service
+# Após o deploy, defina TELEGRAM_BOT_TOKEN no painel do web service.
 
 services:
   # ── Redis (Key Value) ─────────────────────────────────────────────────────
@@ -20,13 +16,14 @@ services:
   # ── Bot (webhook + health + worker embutido) ──────────────────────────────
   - type: web
     name: anime-season-bot
-    runtime: docker
+    runtime: python
     plan: free
-    dockerfilePath: ./Dockerfile
-    dockerTarget: web
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: sh scripts/start_web.sh
     healthCheckPath: /health
-    autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
       - key: BOT_MODE
         value: webhook
       - key: IS_RENDER
@@ -64,43 +61,6 @@ services:
         value: "5"
       - key: ADMIN_TELEGRAM_IDS
         sync: false
-
-  # ── Keep-alive (opcional — requer plano pago para cron no Render) ───────────
-  # Alternativa gratuita: use UptimeRobot (https://uptimerobot.com) para
-  # fazer ping em /health a cada 5 minutos.
-  #
-  # - type: cron
-  #   name: anime-bot-keepalive
-  #   runtime: docker
-  #   plan: starter
-  #   schedule: "*/14 * * * *"
-  #   dockerfilePath: ./Dockerfile
-  #   dockerTarget: curl
-  #   envVars:
-  #     - key: KEEPALIVE_URL
-  #       sync: false
-
-  # ── Worker ARQ separado (opcional — plano starter+) ───────────────────────
-  # Desative EMBEDDED_WORKER no web se usar este serviço.
-  #
-  # - type: worker
-  #   name: anime-season-worker
-  #   runtime: docker
-  #   plan: starter
-  #   dockerfilePath: ./Dockerfile
-  #   dockerTarget: worker
-  #   envVars:
-  #     - key: TELEGRAM_BOT_TOKEN
-  #       sync: false
-  #     - key: DATABASE_URL
-  #       fromDatabase:
-  #         name: anime-bot-db
-  #         property: connectionString
-  #     - key: REDIS_URL
-  #       fromService:
-  #         name: anime-bot-redis
-  #         type: keyvalue
-  #         property: connectionString
 
 databases:
   - name: anime-bot-db

@@ -42,6 +42,8 @@ git push -u origin main
 4. O Render detecta o `render.yaml` automaticamente
 5. Clique **Apply**
 
+> **Nota:** O Render **não suporta** `dockerTarget` no blueprint. O deploy usa **runtime Python nativo** com `requirements.txt`. Se preferir Docker, use `Dockerfile.render` (estágio único) e defina `runtime: docker` + `dockerfilePath: ./Dockerfile.render` — sem `dockerTarget`.
+
 ### 3. Configurar variáveis secretas
 
 No serviço **anime-season-bot**, adicione:
