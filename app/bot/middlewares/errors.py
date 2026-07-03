@@ -5,22 +5,11 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, ErrorEvent, Message, TelegramObject, Update
+from aiogram.types import CallbackQuery, ErrorEvent, Message, TelegramObject
 
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-def _extract_event(event: TelegramObject) -> Message | CallbackQuery | None:
-    if isinstance(event, (Message, CallbackQuery)):
-        return event
-    if isinstance(event, Update):
-        if event.callback_query:
-            return event.callback_query
-        if event.message:
-            return event.message
-    return None
 
 
 class ErrorHandlerMiddleware(BaseMiddleware):
@@ -33,19 +22,17 @@ class ErrorHandlerMiddleware(BaseMiddleware):
         try:
             return await handler(event, data)
         except Exception as exc:
-            inner = _extract_event(event)
             logger.exception(
                 "handler_error",
                 error=str(exc),
                 event_type=type(event).__name__,
-                inner_type=type(inner).__name__ if inner else None,
-                user_id=getattr(getattr(inner, "from_user", None), "id", None),
+                user_id=getattr(getattr(event, "from_user", None), "id", None),
             )
-            await self._notify_user(inner)
+            await self._notify_user(event)
             return None
 
-    async def _notify_user(self, event: Message | CallbackQuery | None) -> None:
-        if event is None:
+    async def _notify_user(self, event: TelegramObject) -> None:
+        if not isinstance(event, (Message, CallbackQuery)):
             return
         msg = "❌ Ocorreu um erro. Tente novamente em instantes."
         try:

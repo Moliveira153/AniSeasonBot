@@ -7,7 +7,7 @@ from collections import defaultdict
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject, Update
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.config import get_settings
 
@@ -23,32 +23,20 @@ class ThrottleMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        user_id = self._get_user_id(event)
+        user_id = None
+        if isinstance(event, Message) and event.from_user:
+            user_id = event.from_user.id
+        elif isinstance(event, CallbackQuery) and event.from_user:
+            user_id = event.from_user.id
 
         if user_id and not self._check_rate(user_id):
-            inner = event
-            if isinstance(event, Update):
-                inner = event.callback_query or event.message
-            if isinstance(inner, CallbackQuery):
-                await inner.answer("⏳ Muitas requisições. Aguarde.", show_alert=True)
-            elif isinstance(inner, Message):
-                await inner.answer("⏳ Muitas requisições. Aguarde um momento.")
+            if isinstance(event, CallbackQuery):
+                await event.answer("⏳ Muitas requisições. Aguarde.", show_alert=True)
+            elif isinstance(event, Message):
+                await event.answer("⏳ Muitas requisições. Aguarde um momento.")
             return None
 
         return await handler(event, data)
-
-    @staticmethod
-    def _get_user_id(event: TelegramObject) -> int | None:
-        if isinstance(event, Message) and event.from_user:
-            return event.from_user.id
-        if isinstance(event, CallbackQuery) and event.from_user:
-            return event.from_user.id
-        if isinstance(event, Update):
-            if event.callback_query and event.callback_query.from_user:
-                return event.callback_query.from_user.id
-            if event.message and event.message.from_user:
-                return event.message.from_user.id
-        return None
 
     def _check_rate(self, user_id: int) -> bool:
         now = time.time()

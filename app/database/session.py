@@ -29,6 +29,7 @@ def get_engine(settings: Settings | None = None) -> AsyncEngine:
             pool_size=settings.db_pool_size,
             max_overflow=settings.db_max_overflow,
             pool_recycle=1800,
+            pool_timeout=30,
         )
     return _engine
 

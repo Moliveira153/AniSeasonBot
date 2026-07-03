@@ -5,9 +5,8 @@ from __future__ import annotations
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.fsm.storage.base import BaseStorage
 from aiogram.types import BotCommand
-from redis.asyncio import Redis
 
 from app.bot.handlers import register_handlers
 from app.bot.middlewares.db import DatabaseMiddleware
@@ -15,7 +14,6 @@ from app.bot.middlewares.errors import ErrorHandlerMiddleware
 from app.bot.middlewares.maintenance import MaintenanceMiddleware
 from app.bot.middlewares.throttle import ThrottleMiddleware
 from app.config import Settings, get_settings
-from app.utils.redis_client import create_fsm_redis
 
 
 async def set_bot_commands(bot: Bot) -> None:
@@ -49,19 +47,23 @@ def create_bot(settings: Settings | None = None) -> Bot:
     )
 
 
-def create_dispatcher(redis: Redis | None = None, settings: Settings | None = None) -> Dispatcher:
-    settings = settings or get_settings()
-    redis = redis or create_fsm_redis(settings)
-    storage = RedisStorage(redis=redis)
+def create_dispatcher(storage: BaseStorage) -> Dispatcher:
     dp = Dispatcher(storage=storage)
 
-    dp.update.middleware(ErrorHandlerMiddleware())
-    dp.update.middleware(MaintenanceMiddleware())
-    dp.update.middleware(ThrottleMiddleware())
-    dp.update.middleware(DatabaseMiddleware())
+    # Middlewares no nível do observer (recebem Message/CallbackQuery, não Update)
+    dp.message.middleware(ErrorHandlerMiddleware())
+    dp.callback_query.middleware(ErrorHandlerMiddleware())
+    dp.inline_query.middleware(ErrorHandlerMiddleware())
+
+    dp.message.middleware(MaintenanceMiddleware())
+    dp.callback_query.middleware(MaintenanceMiddleware())
+
+    dp.message.middleware(ThrottleMiddleware())
+    dp.callback_query.middleware(ThrottleMiddleware())
+
+    dp.message.middleware(DatabaseMiddleware())
+    dp.callback_query.middleware(DatabaseMiddleware())
+    dp.inline_query.middleware(DatabaseMiddleware())
+
     register_handlers(dp)
     return dp
-
-
-def create_fsm_storage_redis(settings: Settings | None = None) -> Redis:
-    return create_fsm_redis(settings)

@@ -56,9 +56,11 @@ services:
       - key: CACHE_TTL
         value: "3600"
       - key: DB_POOL_SIZE
-        value: "3"
-      - key: DB_MAX_OVERFLOW
         value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "10"
+      - key: LOG_FORMAT
+        value: plain
       - key: ADMIN_TELEGRAM_IDS
         sync: false
 

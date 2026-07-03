@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import uuid
 from contextvars import ContextVar
@@ -22,10 +23,21 @@ def get_correlation_id() -> str:
 
 
 def setup_logging(level: str = "INFO") -> None:
+    log_level = getattr(logging, level.upper(), logging.INFO)
+
     logging.basicConfig(
-        format="%(message)s",
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         stream=sys.stdout,
-        level=getattr(logging, level.upper(), logging.INFO),
+        level=log_level,
+        force=True,
+    )
+
+    # Render: logs legíveis em texto (JSON é difícil de ler no dashboard)
+    use_plain = os.getenv("RENDER") or os.getenv("LOG_FORMAT", "").lower() == "plain"
+    renderer = (
+        structlog.dev.ConsoleRenderer()
+        if use_plain
+        else structlog.processors.JSONRenderer()
     )
 
     structlog.configure(
@@ -35,11 +47,9 @@ def setup_logging(level: str = "INFO") -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(),
+            renderer,
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, level.upper(), logging.INFO)
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(log_level),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,
