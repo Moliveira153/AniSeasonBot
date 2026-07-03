@@ -1,0 +1,109 @@
+# Render Blueprint — deploy em https://dashboard.render.com
+#
+# Plano FREE: usa 1 Web Service + Postgres + Key Value (Redis)
+# O worker roda embutido no web (EMBEDDED_WORKER=true) porque
+# Background Workers exigem plano pago no Render.
+#
+# Após o deploy:
+# 1. Defina TELEGRAM_BOT_TOKEN no painel
+# 2. Defina KEEPALIVE_URL no cron (ex: https://anime-season-bot.onrender.com)
+# 3. O Render define RENDER_EXTERNAL_URL automaticamente no web service
+
+services:
+  # ── Redis (Key Value) ─────────────────────────────────────────────────────
+  - type: keyvalue
+    name: anime-bot-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  # ── Bot (webhook + health + worker embutido) ──────────────────────────────
+  - type: web
+    name: anime-season-bot
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerTarget: web
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: BOT_MODE
+        value: webhook
+      - key: IS_RENDER
+        value: "true"
+      - key: EMBEDDED_WORKER
+        value: "true"
+      - key: RUN_MIGRATIONS_ON_STARTUP
+        value: "true"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: anime-bot-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: anime-bot-redis
+          type: keyvalue
+          property: connectionString
+      - key: DEFAULT_LANGUAGE
+        value: pt-BR
+      - key: DEFAULT_TIMEZONE
+        value: America/Sao_Paulo
+      - key: LOG_LEVEL
+        value: INFO
+      - key: NOTIFICATION_CHECK_INTERVAL
+        value: "300"
+      - key: CACHE_TTL
+        value: "3600"
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: DB_MAX_OVERFLOW
+        value: "5"
+      - key: ADMIN_TELEGRAM_IDS
+        sync: false
+
+  # ── Keep-alive (opcional — requer plano pago para cron no Render) ───────────
+  # Alternativa gratuita: use UptimeRobot (https://uptimerobot.com) para
+  # fazer ping em /health a cada 5 minutos.
+  #
+  # - type: cron
+  #   name: anime-bot-keepalive
+  #   runtime: docker
+  #   plan: starter
+  #   schedule: "*/14 * * * *"
+  #   dockerfilePath: ./Dockerfile
+  #   dockerTarget: curl
+  #   envVars:
+  #     - key: KEEPALIVE_URL
+  #       sync: false
+
+  # ── Worker ARQ separado (opcional — plano starter+) ───────────────────────
+  # Desative EMBEDDED_WORKER no web se usar este serviço.
+  #
+  # - type: worker
+  #   name: anime-season-worker
+  #   runtime: docker
+  #   plan: starter
+  #   dockerfilePath: ./Dockerfile
+  #   dockerTarget: worker
+  #   envVars:
+  #     - key: TELEGRAM_BOT_TOKEN
+  #       sync: false
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: anime-bot-db
+  #         property: connectionString
+  #     - key: REDIS_URL
+  #       fromService:
+  #         name: anime-bot-redis
+  #         type: keyvalue
+  #         property: connectionString
+
+databases:
+  - name: anime-bot-db
+    plan: free
+    databaseName: animebot
+    user: animebot
