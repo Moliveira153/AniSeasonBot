@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,13 +28,13 @@ class UserRepository:
         first_name: str | None = None,
         username: str | None = None,
         language: str = "pt-BR",
-        timezone: str = "America/Sao_Paulo",
+        user_timezone: str = "America/Sao_Paulo",
     ) -> User:
         user = await self.get_by_telegram_id(telegram_id)
         if user:
             user.first_name = first_name or user.first_name
             user.username = username or user.username
-            user.last_activity = datetime.now(timezone.utc)
+            user.last_activity = datetime.now(UTC)
             if user.bot_blocked:
                 user.bot_blocked = False
             return user
@@ -44,7 +44,7 @@ class UserRepository:
             first_name=first_name,
             username=username,
             language=language,
-            timezone=timezone,
+            timezone=user_timezone,
             preferences=DEFAULT_PREFERENCES.model_dump(),
         )
         self.session.add(user)
@@ -74,7 +74,7 @@ class UserRepository:
     async def count_active(self, days: int = 7) -> int:
         from sqlalchemy import func
 
-        cutoff = datetime.now(timezone.utc)
+        cutoff = datetime.now(UTC)
         result = await self.session.execute(
             select(func.count()).select_from(User).where(User.bot_blocked.is_(False))
         )
