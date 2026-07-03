@@ -25,6 +25,19 @@ logger = get_logger(__name__)
 
 router = Router(name="start")
 
+LANG_BY_CALLBACK: dict[str, str] = {
+    "pt": "pt-BR",
+    "pt-BR": "pt-BR",
+    "en": "en",
+}
+
+
+def _parse_lang(data: str | None) -> str | None:
+    if not data or not data.startswith("lang:"):
+        return None
+    code = data.split(":", 1)[1]
+    return LANG_BY_CALLBACK.get(code)
+
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, session: AsyncSession) -> None:
@@ -49,8 +62,11 @@ async def cmd_start(message: Message, state: FSMContext, session: AsyncSession) 
 
 @router.callback_query(F.data.startswith("lang:"))
 async def on_language(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
-    await answer_callback(callback)
-    lang = callback.data.split(":")[1]  # type: ignore[union-attr]
+    lang = _parse_lang(callback.data)
+    if not lang:
+        await answer_callback(callback, "Idioma inválido.")
+        return
+
     logger.info("language_selected", user_id=callback.from_user.id, lang=lang)
 
     user_service = UserService(session)
@@ -64,13 +80,16 @@ async def on_language(callback: CallbackQuery, state: FSMContext, session: Async
         reply_markup=timezone_keyboard(),
         parse_mode=None,
     )
-    await state.set_state(OnboardingStates.timezone)
+    await safe_fsm_set_state(state, OnboardingStates.timezone)
+    await answer_callback(callback)
 
 
 @router.callback_query(F.data.startswith("tz:"))
 async def on_timezone(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
-    await answer_callback(callback)
-    tz = callback.data.split(":")[1]  # type: ignore[union-attr]
+    if not callback.data or ":" not in callback.data:
+        await answer_callback(callback, "Fuso horário inválido.")
+        return
+    tz = callback.data.split(":", 1)[1]
     logger.info("timezone_selected", user_id=callback.from_user.id, tz=tz)
 
     user_service = UserService(session)
@@ -84,44 +103,45 @@ async def on_timezone(callback: CallbackQuery, state: FSMContext, session: Async
         reply_markup=yes_no_keyboard("onboard:season_yes", "onboard:season_no"),
         parse_mode=None,
     )
-    await state.set_state(OnboardingStates.season_choice)
+    await safe_fsm_set_state(state, OnboardingStates.season_choice)
+    await answer_callback(callback)
 
 
 @router.callback_query(F.data == "onboard:season_yes")
 async def onboard_season_yes(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
-    await answer_callback(callback)
     from app.bot.handlers.season import show_season_page
 
-    await state.set_state(OnboardingStates.season_browse)
+    await safe_fsm_set_state(state, OnboardingStates.season_browse)
     await show_season_page(callback, session, page=1, onboarding=True)
+    await answer_callback(callback)
 
 
 @router.callback_query(F.data == "onboard:season_no")
 async def onboard_season_no(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
-    await answer_callback(callback)
     user_service = UserService(session)
     user = await user_service.get_or_create_from_telegram(callback.from_user.id)
     i18n = I18n(user.language)
-    await state.clear()
+    await safe_fsm_clear(state)
     await edit_or_send(
         callback,
         f"{i18n.t('welcome')}\n\nUse /ajuda para ver os comandos.",
         parse_mode=None,
     )
+    await answer_callback(callback)
 
 
 @router.callback_query(F.data == "onboard:finish")
 async def onboard_finish(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
-    await answer_callback(callback)
     user_service = UserService(session)
     user = await user_service.get_or_create_from_telegram(callback.from_user.id)
     i18n = I18n(user.language)
-    await state.clear()
+    await safe_fsm_clear(state)
     await edit_or_send(
         callback,
         f"✅ {i18n.t('finish_selection')}\n\nUse /minhalista para ver seus animes.",
         parse_mode=None,
     )
+    await answer_callback(callback)
 
 
 @router.message(Command("ajuda", "help"))

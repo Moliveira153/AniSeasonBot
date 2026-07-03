@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, ErrorEvent, Message, TelegramObject
 
 from app.utils.logging import get_logger
@@ -37,9 +38,15 @@ class ErrorHandlerMiddleware(BaseMiddleware):
         msg = "❌ Ocorreu um erro. Tente novamente em instantes."
         try:
             if isinstance(event, Message):
-                await event.answer(msg)
+                await event.answer(msg, parse_mode=None)
             elif isinstance(event, CallbackQuery):
-                await event.answer(msg, show_alert=True)
+                try:
+                    await event.answer(msg, show_alert=True)
+                except TelegramBadRequest:
+                    if event.message:
+                        await event.message.answer(msg, parse_mode=None)
+                    else:
+                        await event.bot.send_message(event.from_user.id, msg, parse_mode=None)
         except Exception:
             pass
 

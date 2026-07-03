@@ -89,7 +89,7 @@ async def set_language(callback: CallbackQuery, session: AsyncSession) -> None:
     from app.bot.utils.messages import answer_callback, edit_or_send
 
     await answer_callback(callback)
-    await edit_or_send(callback, "🌐 Escolha seu idioma:", reply_markup=language_keyboard())
+    await edit_or_send(callback, "🌐 Escolha seu idioma:", reply_markup=language_keyboard(), parse_mode=None)
 
 
 @router.callback_query(F.data == "set:timezone")
@@ -97,7 +97,7 @@ async def set_timezone(callback: CallbackQuery, session: AsyncSession) -> None:
     from app.bot.utils.messages import answer_callback, edit_or_send
 
     await answer_callback(callback)
-    await edit_or_send(callback, "🕐 Escolha seu fuso horário:", reply_markup=timezone_keyboard())
+    await edit_or_send(callback, "🕐 Escolha seu fuso horário:", reply_markup=timezone_keyboard(), parse_mode=None)
 
 
 @router.callback_query(F.data == "set:images")

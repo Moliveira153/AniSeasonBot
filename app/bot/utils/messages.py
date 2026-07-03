@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.utils.logging import get_logger
@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 
 async def answer_callback(callback: CallbackQuery, text: str | None = None) -> None:
-    """Answer callback immediately to remove loading spinner."""
+    """Answer callback to remove loading spinner."""
     try:
         await callback.answer(text)
     except TelegramBadRequest:
@@ -32,27 +32,50 @@ async def safe_reply(
         await message.answer(text, reply_markup=reply_markup, parse_mode=None)
 
 
+def _callback_chat_id(callback: CallbackQuery) -> int:
+    if callback.message and isinstance(callback.message, Message):
+        return callback.message.chat.id
+    return callback.from_user.id
+
+
 async def edit_or_send(
     callback: CallbackQuery,
     text: str,
     reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: str | None = None,
 ) -> None:
-    """Edit message or send new one if edit fails."""
-    if not callback.message:
-        return
+    """Edit originating message or send a new one as fallback."""
+    if callback.message and isinstance(callback.message, Message):
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+            )
+            return
+        except TelegramAPIError as exc:
+            logger.warning("edit_or_send_edit_failed", error=str(exc))
+
+        try:
+            await callback.message.answer(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+            )
+            return
+        except TelegramAPIError as exc:
+            logger.warning("edit_or_send_answer_failed", error=str(exc))
+
     try:
-        await callback.message.edit_text(
+        await callback.bot.send_message(
+            _callback_chat_id(callback),
             text,
             reply_markup=reply_markup,
             parse_mode=parse_mode,
         )
-    except TelegramBadRequest:
-        await callback.message.answer(
-            text,
-            reply_markup=reply_markup,
-            parse_mode=parse_mode,
-        )
+    except TelegramAPIError as exc:
+        logger.error("edit_or_send_send_failed", error=str(exc))
+        raise
 
 
 async def safe_fsm_clear(state: object) -> None:
